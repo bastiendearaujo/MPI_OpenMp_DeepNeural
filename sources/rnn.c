@@ -12,6 +12,9 @@
 
 #define NUM_THREADS 2
 
+char * fileTestKdd = "./exampleFiles/KDDTest+.txt";
+char * fileLearnKdd = "./exampleFiles/KDDTest+.txt";
+
 int layerSize[NBLAYER];
 
 typedef struct layer LAYER;
@@ -334,7 +337,7 @@ void learnKDD(){
 
     nbRawMatrix = 0;
     tbeg = MPI_Wtime();
-    preprocessing("./exampleFiles/KDDTest+.txt");
+    preprocessing(fileLearnKdd);
     elapsedTime = MPI_Wtime() - tbeg;
     printf("Time to execute preprocessing : %f\n", elapsedTime);nbErrorFind = malloc(sizeof(int)*sizeOfTableOutput);
     #pragma omp for schedule(static) private(i)
@@ -398,7 +401,7 @@ void learnKDD(){
 
 void testKDD(){
     nbRawMatrix = 0;
-    preprocessing("./exampleFiles/KDDTest+.txt");
+    preprocessing(fileTestKdd);
 
     nbErrorFind = malloc(sizeof(int)*sizeOfTableOutput);
     for (int i = 0; i < sizeOfTableOutput; ++i){
