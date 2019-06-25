@@ -3,11 +3,11 @@
 #define NBLAYER 5
 #define NBHD 120
 
-void displayErrorFind();
+void displayErrorFind(int * nbErrorFind);
 char* getfield(char*, int);
-void readFile(char *, char**);
-void makeVector(int, char *, double*, int*, char**);
-void makeMatrix(char *, double*, int*, char**);
+void readFile(char *);
+void makeVector(int, char *, double*, int*);
+void makeMatrix(char *, double*, int*);
 int getNbColMatrix();
 int getNbRawMatrix();
 int getSizeOfTableOutput();

@@ -13,7 +13,7 @@
 #define NUM_THREADS 2
 
 char * fileTestKdd = "./exampleFiles/KDDTest+.txt";
-char * fileLearnKdd = "./exampleFiles/KDDTest+.txt";
+char * fileLearnKdd = "./exampleFiles/KDDTrain+.txt";
 
 int layerSize[NBLAYER];
 
@@ -33,18 +33,14 @@ LAYER * tabLayer[NBLAYER];
 
 int * nbErrorFind;
 double * matrix;
-char ** outTable;
+char * outTableRnn [5] = {"Normal", "Probe", "DOS", "R2L", "U2R"};
 int * vectorOutput;
 int nbColMatrix;
 int nbRawMatrix;
 int sizeOfTableOutput;
 
 void preprocessing(char * nameFile){
-    outTable = malloc(sizeof(char*)*100);
-    for (int i = 0; i < 100; i++)
-        outTable[i] = malloc(100 * sizeof(char));
-
-    readFile(nameFile, outTable);
+    readFile(nameFile);
     sizeOfTableOutput = getSizeOfTableOutput();
     nbColMatrix = getNbColMatrix();
     nbRawMatrix = getNbRawMatrix();
@@ -52,7 +48,7 @@ void preprocessing(char * nameFile){
     vectorOutput = malloc(sizeof(int)*nbRawMatrix);
 
 
-    makeMatrix(nameFile, matrix, vectorOutput, outTable);
+    makeMatrix(nameFile, matrix, vectorOutput);
 }
 
 void init_layer(LAYER * layer, int raw, int currentLayer){
@@ -68,7 +64,6 @@ void init_layer(LAYER * layer, int raw, int currentLayer){
         for (i=0; i<nbColMatrix; i++) {
             layer->value[i] = matrix[nbColMatrix*raw+i];
         }
-
         // Init weight 
         layer->weight = malloc(sizeof(double)*nbColMatrix*layerSize[currentLayer+1]);
         #pragma omp for schedule(static) private(i)
@@ -122,10 +117,20 @@ void init_layer(LAYER * layer, int raw, int currentLayer){
 
 void rnnsetstart(LAYER * tabLayer[]){
     int i, k;
+    #pragma omp for schedule(static) private(i)
     for (i = 0; i < NBLAYER; ++i){
         if (tabLayer[i]->typeLayer == NBLAYER-1){
             for (k = 0; k < tabLayer[i]->nbNodes; ++k){
+                // Parallelize
+                // MPI_Bcast(matrix_B, n*n, MPI_INT, 0, MPI_COMM_WORLD);
+                // MPI_Scatter(matrix_A, n*n/nb_procs, MPI_INT, piece_matrix, n*n/nb_procs, MPI_INT,0,MPI_COMM_WORLD);
+
                 tabLayer[i]->value_prev[k] = sigmoid(tabLayer[i]->value[k]);
+
+                // MPI_Barrier(MPI_COMM_WORLD);
+                // MPI_Gather( result_piece_matrix, n*n/nb_procs, MPI_INT, matrix_Result, n*n/nb_procs, MPI_INT, 0, MPI_COMM_WORLD);
+                // Block the caller until all processes in the communicator have called it
+                // MPI_Barrier(MPI_COMM_WORLD);
             }
         }else{
             for (k = 0; k < tabLayer[i]->nbNodes; ++k){
@@ -137,25 +142,31 @@ void rnnsetstart(LAYER * tabLayer[]){
 
 void rnnset(LAYER * tabLayer[]){
     int i,j;
-
+    #pragma omp for schedule(static) private(i)
     for (i = 0; i < NBLAYER; ++i){
         // If not input
         if(tabLayer[i]->typeLayer != 0){
             for (j = 0; j < tabLayer[i]->nbNodes; ++j){
                 tabLayer[i]->value[j] = tabLayer[i]->bias[j];
             }
+            // Parallelize
+            // MPI_Bcast(matrix_B, n*n, MPI_INT, 0, MPI_COMM_WORLD);
+            // MPI_Scatter(matrix_A, n*n/nb_procs, MPI_INT, piece_matrix, n*n/nb_procs, MPI_INT,0,MPI_COMM_WORLD);
+            
             matrixTimesMatrixTan(tabLayer[i-1]->value, tabLayer[i-1]->value_prev, tabLayer[i-1]->weight, tabLayer[i]->value, tabLayer[i-1]->bias, tabLayer[i-1]->nbNodes, tabLayer[i]->nbNodes);            
-            // softmax(tabLayer[i]->value, tabLayer[i]->nbNodes);
+
+            // MPI_Barrier(MPI_COMM_WORLD);
+            // MPI_Gather( result_piece_matrix, n*n/nb_procs, MPI_INT, matrix_Result, n*n/nb_procs, MPI_INT, 0, MPI_COMM_WORLD);
+            // Block the caller until all processes in the communicator have called it
+            // MPI_Barrier(MPI_COMM_WORLD);
         }
     }
 }
 
 void rnnlearn(LAYER * tabLayer[], double * out, double learningrate){
     int i,j,k;
-    // double * derivative;
-    // double * wchange;
-    double tmp;
-
+    int normalize = 5;
+    #pragma omp for schedule(static) private(i)
     for(i = 0; i < NBLAYER; i++){
         for (j = 0; j < tabLayer[i]->nbNodes; ++j){
             tabLayer[i]->error[j] = 0.0;
@@ -163,100 +174,72 @@ void rnnlearn(LAYER * tabLayer[], double * out, double learningrate){
 
         if (tabLayer[i]->typeLayer == NBLAYER-1){
             // Substraction vector with OUT and final out
+            // Parallelize
+            // MPI_Bcast(matrix_B, n*n, MPI_INT, 0, MPI_COMM_WORLD);
+            // MPI_Scatter(matrix_A, n*n/nb_procs, MPI_INT, piece_matrix, n*n/nb_procs, MPI_INT,0,MPI_COMM_WORLD);
+
             vectorSubstraction(tabLayer[i]->value, out, tabLayer[i]->error, tabLayer[i]->nbNodes);
+
+            // MPI_Barrier(MPI_COMM_WORLD);
+            // MPI_Gather( result_piece_matrix, n*n/nb_procs, MPI_INT, matrix_Result, n*n/nb_procs, MPI_INT, 0, MPI_COMM_WORLD);
+            // Block the caller until all processes in the communicator have called it
+            // MPI_Barrier(MPI_COMM_WORLD);
         }
     }
 
     for(i = NBLAYER-2; i>= 0; i--){
+        // Parallelize
+        // MPI_Bcast(matrix_B, n*n, MPI_INT, 0, MPI_COMM_WORLD);
+        // MPI_Scatter(matrix_A, n*n/nb_procs, MPI_INT, piece_matrix, n*n/nb_procs, MPI_INT,0,MPI_COMM_WORLD);
+        
         matrixTimesMatrix(tabLayer[i+1]->error, tabLayer[i]->weight, tabLayer[i]->error, tabLayer[i+1]->nbNodes, tabLayer[i]->nbNodes);
+        
+        // MPI_Barrier(MPI_COMM_WORLD);
+        // MPI_Gather( result_piece_matrix, n*n/nb_procs, MPI_INT, matrix_Result, n*n/nb_procs, MPI_INT, 0, MPI_COMM_WORLD);
+        // Block the caller until all processes in the communicator have called it
+        // MPI_Barrier(MPI_COMM_WORLD);
     }
 
+    #pragma omp for schedule(static) private(i)
     for(i = NBLAYER-2; i>= 0; i--){
-        for (j = 0; j < tabLayer[i]->nbNodes; ++j){
-            for (k = 0; k < tabLayer[i+1]->nbNodes; ++k){
-                tmp = tabLayer[i+1]->error[k] * learningrate * tabLayer[i]->value[j];
+        for (k = 0; k < tabLayer[i+1]->nbNodes; ++k){
+            double tmp=0.0;
+            for (j = 0; j < tabLayer[i]->nbNodes; ++j){
+
+                tmp = tabLayer[i+1]->error[k] * learningrate;
                 if(i != NBLAYER-2){
-                    tmp *= 1 - (tabLayer[i+1]->value[j] * tabLayer[i+1]->value[j]);
+                    tmp *= 1 - (tabLayer[i+1]->value[k] * tabLayer[i+1]->value[k]);
                 }
                 tabLayer[i]->weight[j*tabLayer[i+1]->nbNodes+k] -= tmp;
 
-                if(tabLayer[i]->weight[j*tabLayer[i+1]->nbNodes+k]>5){
-                    tabLayer[i]->weight[j*tabLayer[i+1]->nbNodes+k]=5;
-                }else if(tabLayer[i]->weight[j*tabLayer[i+1]->nbNodes+k]<(-5)){
-                    tabLayer[i]->weight[j*tabLayer[i+1]->nbNodes+k] = (-5);
+                if (i == NBLAYER-2){
+                    // Normalize weight
+                    if(tabLayer[i]->weight[j*tabLayer[i+1]->nbNodes+k]>normalize){
+                        tabLayer[i]->weight[j*tabLayer[i+1]->nbNodes+k]=normalize;
+                    }else if(tabLayer[i]->weight[j*tabLayer[i+1]->nbNodes+k]<(-normalize)){
+                        tabLayer[i]->weight[j*tabLayer[i+1]->nbNodes+k] = (-normalize);
+                    }
                 }
             }
-        }
-
-        vectorMinusVector(tabLayer[i+1]->bias, tabLayer[i+1]->error, tabLayer[i]->nbNodes);
-        
-        // derivative = malloc(sizeof(double)*tabLayer[i+1]->nbNodes);
-        // wchange = malloc(sizeof(double)*tabLayer[i+1]->nbNodes*tabLayer[i]->nbNodes);
-
-        // for (j = 0; j < tabLayer[i+1]->nbNodes; ++j){
-        //     derivative[j] = 0.0;
-        //     for (k = 0; k < tabLayer[i]->nbNodes; ++k){
-        //         wchange[k*tabLayer[i+1]->nbNodes+j] = 0.0;
-        //     }
-        // }
-
-        // if(i == NBLAYER-2){
-        //     vectorTimesDouble(tabLayer[i+1]->error, derivative, learningrate, tabLayer[i+1]->nbNodes, 0);
-            
-        //     for (j = 0; j < tabLayer[i+1]->nbNodes; ++j){
-        //         for (k = 0; k < tabLayer[i]->nbNodes; ++k){
-        //             wchange[k*tabLayer[i+1]->nbNodes+j] = derivative[j];
-        //         }
-        //     }
-            
-        //     // wchange *= value i+1
-        //     matrixScalaire(wchange, tabLayer[i]->value, tabLayer[i+1]->nbNodes, tabLayer[i]->nbNodes);
-        //     // weight i -= wchange;
-        //     matrixMinusMatrix(tabLayer[i]->weight, wchange, tabLayer[i]->nbNodes, tabLayer[i+1]->nbNodes);
-        //     // Normalisation de weight -5 et 5
-        //     normalisation(tabLayer[i]->weight, 5, tabLayer[i]->nbNodes*tabLayer[i+1]->nbNodes);
-        //     // bias i+1 -= derivative
-        //     vectorMinusVector(tabLayer[i+1]->bias, derivative, tabLayer[i]->nbNodes);
-        //     // Normalisation de bias -5 et 5
-        //     normalisation(tabLayer[i+1]->bias, 5, tabLayer[i]->nbNodes);
-
-        // }
-        // else{ // If not Output Layer
-        //     // derivative = 1.0 - value i+1 ^ 2
-        //     computeDerivative(derivative, tabLayer[i+1]->value, tabLayer[i+1]->nbNodes);
-
-        //     // derivative *= error i + 1 * learningrate
-        //     vectorTimesDouble(tabLayer[i+1]->error, derivative, learningrate, tabLayer[i+1]->nbNodes, 1);
-            
-        //     for (j = 0; j < tabLayer[i+1]->nbNodes; ++j){
-        //         for (k = 0; k < tabLayer[i]->nbNodes; ++k){
-        //             wchange[k*tabLayer[i+1]->nbNodes+j] = derivative[j];
-        //         }
-        //     }
-
-        //     // wchange *= value i+1
-        //     matrixScalaire(wchange, tabLayer[i]->value, tabLayer[i+1]->nbNodes, tabLayer[i]->nbNodes);
-        //     // weight i -= wchange
-        //     matrixMinusMatrix(tabLayer[i]->weight, wchange, tabLayer[i]->nbNodes, tabLayer[i+1]->nbNodes);
-        //     // bias i -= derivative
-            // vectorMinusVector(tabLayer[i+1]->bias, derivative, tabLayer[i]->nbNodes);
-        // }
-
-        // free(wchange);
-        // free(derivative);
-    }
-
-    // Update error_prev:
-    for(i = 0; i < NBLAYER; i++){
-        for (j = 0; j < tabLayer[i]->nbNodes; ++j){
-            tabLayer[i]->error_prev[j] = tabLayer[i]->error[j];
+            tabLayer[i+1]->bias[k] -= tmp;
+            if(i == NBLAYER-2){
+                // Normalize weight
+                if(tabLayer[i]->bias[k]>normalize){
+                    tabLayer[i]->bias[k]=normalize;
+                }
+                else if(tabLayer[i]->bias[k]<-normalize){
+                    tabLayer[i]->bias[k]=-normalize;
+                }   
+            }
         }
     }
 }
 
 double geterror(LAYER* tabLayer){
     double res =0.0;
-    for (int i = 0; i < tabLayer->nbNodes; ++i){ 
+    int i;
+    #pragma omp for schedule(static) private(i)
+    for (i = 0; i < tabLayer->nbNodes; ++i){ 
         if(tabLayer->error[i]<0){
             res -= tabLayer->error[i];
         }else{
@@ -267,13 +250,16 @@ double geterror(LAYER* tabLayer){
 }
 
 void displayResult(LAYER * layer){
-    for (int i = 0; i < layer->nbNodes; ++i){ 
-        printf("Result [%s] = %f\n",outTable[i], layer->value[i]);
+    int i;
+    for (i = 0; i < layer->nbNodes; ++i){ 
+        printf("Result [%s] = %f\n",outTableRnn[i], layer->value[i]);
     }
 }
 
 void fillOutc(double * out, int raw){
-    for (int i = 0; i < sizeOfTableOutput; ++i){
+    int i; 
+    #pragma omp for schedule(static) private(i)
+    for (i = 0; i < sizeOfTableOutput; ++i){
         if (i == vectorOutput[raw]){
             out[i] = 1.0;
         }else{
@@ -285,6 +271,7 @@ void fillOutc(double * out, int raw){
 void initLayerSize(){
     int i;
     layerSize[0] = nbColMatrix; 
+    #pragma omp for schedule(static) private(i)
     for (i = 1; i < NBLAYER-1; ++i){
         layerSize[i] = NBHD;
     }
@@ -295,11 +282,12 @@ void wichError(LAYER * layer){
     double max = 0.0;
     char * res;
     ((void) res);
-    int indiceMax =0;
-    for (int i = 0; i < layer->nbNodes; ++i){ 
+    int i, indiceMax =0;
+    #pragma omp for schedule(static) private(i)
+    for (i = 0; i < layer->nbNodes; ++i){ 
         if (layer->value[i]>max){
             max = layer->value[i];
-            res = outTable[i];
+            res = outTableRnn[i];
             indiceMax = i;
         }
     }
@@ -322,6 +310,7 @@ void freeLayer(LAYER * layer){
 void ajustError(LAYER * layer){
     int i;
     double sum = 0.0;
+    #pragma omp for schedule(static) private(i)
     for (i = 0; i < layer->nbNodes; i++){ 
         sum += layer->value[i];
     }
@@ -339,7 +328,8 @@ void learnKDD(){
     tbeg = MPI_Wtime();
     preprocessing(fileLearnKdd);
     elapsedTime = MPI_Wtime() - tbeg;
-    printf("Time to execute preprocessing : %f\n", elapsedTime);nbErrorFind = malloc(sizeof(int)*sizeOfTableOutput);
+    printf("Time to execute preprocessing : %f\n", elapsedTime);
+    nbErrorFind = malloc(sizeof(int)*sizeOfTableOutput);
     #pragma omp for schedule(static) private(i)
     for (i = 0; i < sizeOfTableOutput; ++i){
         nbErrorFind[i] = 0;
@@ -355,21 +345,20 @@ void learnKDD(){
     }
     
     // RUN
-    double error = 1;
-    double * outc = malloc(sizeof(double)*sizeOfTableOutput);
+    double error = 1.0;
+    ((void) error);
+    double * out = malloc(sizeof(double)*sizeOfTableOutput);
     double learningrate = 0.03;
 
     for (i = 0; i < nbRawMatrix; ++i){ //nbRawMatrix
-        error = 1;
+        error = 1.0;
         j = 0;
         init_layer(tabLayer[0], i, 0);
-
-        fillOutc(outc, i);
-
-        while (error > 0.01 && j<1000) {
+        fillOutc(out, i);
+        while (error > 0.05 && j<1000) {
             rnnsetstart(tabLayer);
             rnnset(tabLayer);
-            rnnlearn(tabLayer,outc,learningrate);
+            rnnlearn(tabLayer,out,learningrate);
             error = geterror(tabLayer[NBLAYER-1]);
             j++;
         }
@@ -391,12 +380,12 @@ void learnKDD(){
 
     }
     
-    free(outc);
+    free(out);
 
     printf("\nMoyenne iteration par ligne  : %d \n", sum / nbRawMatrix);
 
     printf("\nError Find in learnKDD : \n");
-    displayErrorFind(outTable, nbErrorFind);
+    displayErrorFind(nbErrorFind);
 }
 
 void testKDD(){
@@ -410,12 +399,13 @@ void testKDD(){
 
     initLayerSize();
     // RUN
-    double error =1;
+    double error = 1.0;
+    ((void) error);
     double * outc = malloc(sizeof(double)*sizeOfTableOutput);
     double learningrate = 0.1;
     int i, j;
     for (i = 0; i < nbRawMatrix; ++i){ //nbRawMatrix
-        error = 1;
+        error = 1.0;
         j = 0;
         init_layer(tabLayer[0], i, 0);
         fillOutc(outc, i);
@@ -442,7 +432,7 @@ void testKDD(){
     }
 
     printf("\nError Find in TestKDD : \n");
-    displayErrorFind(outTable, nbErrorFind);
+    displayErrorFind(nbErrorFind);
 }
 
 int main(int argc, char ** argv){

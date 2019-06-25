@@ -14,7 +14,9 @@ void printTab(char** tab, int size){
 
 int isPresentTab(char ** tab, int size, char * str){
     int i;
+    // printf("TOP\n");
     for(i = 0; i < size; i++){
+        // printf("tab[i] %s = %s \n",tab[i], str);
         if(!strcmp(tab[i], str)){
             return 1;
         }

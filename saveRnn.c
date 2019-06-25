@@ -340,6 +340,27 @@ void rnnlearn(LAYER * tabLayer[], double * out, double learningrate){
         }
 
         if(i == NBLAYER-2){
+
+        // for (j = 0; j < tabLayer[i]->nbNodes; ++j){
+        //     for (k = 0; k < tabLayer[i+1]->nbNodes; ++k){
+        //         tmp = tabLayer[i+1]->error[k] * learningrate * tabLayer[i]->value[j];
+        //         if(i != NBLAYER-2){
+        //             tmp *= 1 - (tabLayer[i+1]->value[j] * tabLayer[i+1]->value[j]);
+        //         }
+        //         tabLayer[i]->weight[j*tabLayer[i+1]->nbNodes+k] -= tmp;
+
+        //         // Normalize weight
+        //         if(tabLayer[i]->weight[j*tabLayer[i+1]->nbNodes+k]>normalize){
+        //             tabLayer[i]->weight[j*tabLayer[i+1]->nbNodes+k]=normalize;
+        //         }else if(tabLayer[i]->weight[j*tabLayer[i+1]->nbNodes+k]<(-normalize)){
+        //             tabLayer[i]->weight[j*tabLayer[i+1]->nbNodes+k] = (-normalize);
+        //         }
+        //     }
+        // }
+
+        // vectorMinusVector(tabLayer[i+1]->bias, tabLayer[i+1]->error, tabLayer[i]->nbNodes);
+        // normalisation(tabLayer[i+1]->bias, 5, tabLayer[i]->nbNodes);
+
             vectorTimesDouble(tabLayer[i+1]->error, derivative, learningrate, tabLayer[i+1]->nbNodes, 0);
             
             for (j = 0; j < tabLayer[i+1]->nbNodes; ++j){

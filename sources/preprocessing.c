@@ -20,7 +20,19 @@ char ** serviceTable;
 char ** flagTable;
 int * nbOutTable;
 
-void displayErrorFind(char ** outTable, int * nbErrorFind){
+int sizeProbe = 10;
+int sizeDos = 18;
+int sizeR2l = 24;
+int sizeU2r = 17;
+
+char * PROBE [10] = {"portsweep", "nmap", "ipsweep", "queso", "satan", "saint", "mscan", "ntinfoscan", "lsdomain", "illegal-sniffer"};
+char * DOS [18] = {"udpstorm","apache2", "smurf", "neptune", "dosnuke", "land", "pod", "back", "teardrop", "tcpreset", "syslogd", "crashiis", "arppoison", "mailbomb", "selfping","processtable", "upstorm", "worm"};
+char * R2L [24] = {"dict", "spy", "multihop", "warezmaster", "guess_passwd", "netcat", "sendmail", "imap", "ncftp", "xlock", "xsnoop", "sshtrojan", "framespoof", "ppmacro", "guest", "netbus", "snmpget", "snmpguess", "snmpgetattack", "ftp_write", "warezclient", "httptunnel", "phf", "named"};
+char * U2R [17] = {"sechole", "rootkit", "buffer_overflow", "xterm", "eject", "ps", "nukepw", "secret", "perl", "yaga", "fdformat", "ffbconfig", "casesen", "ntfsdos", "ppmacro", "loadmodule", "sqlattack"};
+
+char * outTable [5] = {"Normal", "Probe", "DOS", "R2L", "U2R"};
+
+void displayErrorFind(int * nbErrorFind){
     for (int i = 0; i < sizeOfTableOutput; ++i){
         printf("%s : %d / %d | difference : %d \n", outTable[i] ,nbErrorFind[i], nbOutTable[i], nbErrorFind[i]-nbOutTable[i]);
     }
@@ -38,13 +50,13 @@ char* getfield(char* line, int num){
     return NULL;
 }
 
-void readFile(char * nameFile, char ** outTable){
+void readFile(char * nameFile){
     nbRawMatrix = 0;
     FILE* stream = fopen(nameFile, "r");
     sizeOfTableProtocol = 0;
     sizeOfTableService = 0;
     sizeOfTableFlag = 0;
-    sizeOfTableOutput = 0;
+    sizeOfTableOutput = 5;
     int i;
     char line[1024];
     
@@ -63,9 +75,6 @@ void readFile(char * nameFile, char ** outTable){
     for (i = 0; i < 100; i++)
         flagTable[i] = malloc(100 * sizeof(char));
 
-    
-
-
     while (fgets(line, 1024, stream)){
         char* tmp = strdup(line);
         char* protocol = getfield(tmp, 2);
@@ -76,8 +85,8 @@ void readFile(char * nameFile, char ** outTable){
         tmp = strdup(line);
         char* flag = getfield(tmp, 4);
 
-        tmp = strdup(line);
-        char* out = getfield(tmp, 42);
+        // tmp = strdup(line);
+        // char* out = getfield(tmp, 42);
         
         if(!isPresentTab(protocolTable, sizeOfTableProtocol, protocol)){
             strcpy(protocolTable[sizeOfTableProtocol], protocol);
@@ -94,10 +103,9 @@ void readFile(char * nameFile, char ** outTable){
             sizeOfTableFlag++;
         }
 
-        if(!isPresentTab(outTable, sizeOfTableOutput, out)){
-            strcpy(outTable[sizeOfTableOutput], out);
-            sizeOfTableOutput++;
-        }
+        // if(!isPresentTab(outTable, sizeOfTableOutput, out)){
+            // strcpy(outTable[sizeOfTableOutput], out);
+        // }
 
         free(tmp);
         nbRawMatrix ++;
@@ -126,7 +134,7 @@ void readFile(char * nameFile, char ** outTable){
     nbColMatrix = sizeOfTableProtocol + sizeOfTableService + sizeOfTableFlag + 38;
 }
 
-void makeVector(int currentColinRaw, char * field, double * matrix, int * vectorOutput, char ** outTable){
+void makeVector(int currentColinRaw, char * field, double * matrix, int * vectorOutput){
     int i;
     if (currentColinRaw == 1){
         for(i = 0; i < sizeOfTableProtocol; i++){
@@ -156,14 +164,34 @@ void makeVector(int currentColinRaw, char * field, double * matrix, int * vector
             currentCol++;
         }
     }else if(currentColinRaw == 41){
-        for(i = 0; i < sizeOfTableOutput; i++){
-            if(!strcmp(field, outTable[i])){
-                vectorOutput[currentRaw] = i;
-                nbOutTable[i]++;
-            }else{
 
-            }
+        // Check if is present in one attack table (normal, probe, dos, r2l, u2r)
+        if (isPresentTab(PROBE, sizeProbe, field)){
+            // incremente PROBE
+            nbOutTable[1]++;
+            vectorOutput[currentRaw] = 1;
+        } else if (isPresentTab(DOS, sizeDos, field)){
+            // incremente DOS
+            nbOutTable[2]++; 
+            vectorOutput[currentRaw] = 2;
+        }else if (isPresentTab(R2L, sizeR2l, field)){
+            // incremente R2L
+            nbOutTable[3]++;
+            vectorOutput[currentRaw] = 3;
+        }else if (isPresentTab(U2R, sizeU2r, field)){
+            // incremente U2R
+            nbOutTable[4]++;
+            vectorOutput[currentRaw] = 4;
+        }else if (!strcmp(field, "normal")){
+            // incremente Normal
+            nbOutTable[0]++;
+            vectorOutput[currentRaw] = 0;
+        }else{
+            // Erreur inconnue
+            printf("L'erreur : ' %s ' n'est pas prise un charge par le programme.\n Arrêt.\n", field);
+            exit(0);
         }
+
     }else {
         matrix[currentRaw*nbColMatrix+currentCol] = tanh(atof(field));
         currentCol++;
@@ -171,7 +199,7 @@ void makeVector(int currentColinRaw, char * field, double * matrix, int * vector
 
 }
 
-void makeMatrix(char * nameFile, double * matrix, int * vectorOutput, char ** outTable){
+void makeMatrix(char * nameFile, double * matrix, int * vectorOutput){
     currentRaw = 0;
     #ifdef ALLINF
         printf("\nMatrix in creation\n");
@@ -186,7 +214,7 @@ void makeMatrix(char * nameFile, double * matrix, int * vectorOutput, char ** ou
         for (i = 0; i <= NBCOL; i++){
             char* tmp = strdup(line);
             field = getfield(tmp, i+1);
-            makeVector(i, field, matrix, vectorOutput, outTable);
+            makeVector(i, field, matrix, vectorOutput);
         }
         currentRaw ++; 
     }
