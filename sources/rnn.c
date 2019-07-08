@@ -298,7 +298,7 @@ void ajustError(LAYER * layer){
 }
 
 // Create new layer to send at each cluster
-// void splitLayer(int rank, LAYER * oldTabLayer[], LAYER * newTabLayer[]){
+//void splitLayer(int rank, LAYER * oldTabLayer[], LAYER * newTabLayer[]){
 
 //     /***** Split INPUT layer *****/
 //     int nbElemInput, i, j, k;
@@ -316,8 +316,9 @@ void ajustError(LAYER * layer){
 //         newTabLayer[0]->value[i] = oldTabLayer[0]->value[10*rank+i];
 //     }
 
-//     **** Split HD layer ****
+//     /**** Split HD layer ****/
 //     for(i = 1; i < NBLAYER-2; i++){ //Each hidden layer
+//         newTabLayer[i]->nbNodes = 10;
 //         // Split value
 //         for (j = 0; j < 10; j++){
 //             newTabLayer[i]->value[j] = oldTabLayer[i]->value[10*rank+j];
@@ -326,7 +327,7 @@ void ajustError(LAYER * layer){
 //         // Split weight
 //         for (k = 0; k < tabLayer[k]->nbNodes; k++) {
 //             for (j = 0; j < tabLayer[i-1]->nbNodes; j++) {
-//                 newTabLayer[i]->weight[k] = oldTabLayer->weight[j*tabLayer[i]->nbNodes+k];
+//                 newTabLayer[i]->weight[k] = oldTabLayer[i]->weight[j*tabLayer[i]->nbNodes+k];
 //             }
 //         }
 //     }
@@ -342,7 +343,7 @@ void learnKDD(){
     preprocessing(fileLearnKdd);
     end = clock();
     cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("Time to execute learnKDD : %f\n", cpu_time_used);
+    printf("Time to execute preprocessing : %f\n", cpu_time_used);
 
     nbErrorFind = malloc(sizeof(int)*sizeOfTableOutput);
     #pragma omp for schedule(static) private(i)
@@ -363,9 +364,9 @@ void learnKDD(){
     double error = 1.0;
     ((void) error);
     double * out = malloc(sizeof(double)*sizeOfTableOutput);
-    double learningrate = 0.03;
+    double learningrate = 0.1;
 
-    for (i = 1; i <= nbRawMatrix; ++i){
+    for (i = 0; i < nbRawMatrix; ++i){
         error = 1.0;
         j = 0;
         init_layer(tabLayer[0], i, 0);
@@ -418,14 +419,14 @@ void testKDD(){
     double * outc = malloc(sizeof(double)*sizeOfTableOutput);
     double learningrate = 0.1;
     int i;
-    for (i = 1; i <= nbRawMatrix; ++i){
+    for (i = 0; i < nbRawMatrix; ++i){
         error = 1.0;
         init_layer(tabLayer[0], i, 0);
         fillOutc(outc, i);
         
         rnnsetstart(tabLayer);
         rnnset(tabLayer, outc);
-        rnnlearn(tabLayer,outc,learningrate);
+        // rnnlearn(tabLayer,outc,learningrate);
         error = geterror(tabLayer[NBLAYER-1]);
         ajustError(tabLayer[NBLAYER-1]);
 

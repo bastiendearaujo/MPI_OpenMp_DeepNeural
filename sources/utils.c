@@ -85,12 +85,14 @@ void matrixScalaire(double * matrix, double * vector, int col, int raw){
     }
 }
 
+// matrixTimesMatrix(tabLayer[i+1]->error, tabLayer[i]->weight, tabLayer[i]->error, tabLayer[i+1]->nbNodes, tabLayer[i]->nbNodes);
 void matrixTimesMatrix(double * matrix_A, double * matrix_B, double * matrix_Result, int n, int m){
     int i, j;
     for (i = 0; i < m; i++) {
         for (j = 0; j < n; j++) {
-            matrix_Result[i] +=  matrix_B[i*n+j]* matrix_A[j];
+            matrix_Result[i] +=  matrix_B[j*n+i]* matrix_A[j];
         }
+        matrix_Result[i] = tanh(matrix_Result[i]);
     }
 }
 
