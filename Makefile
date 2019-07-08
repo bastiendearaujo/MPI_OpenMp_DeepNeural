@@ -1,5 +1,5 @@
 all: main clean
-
+allinf: debug clean
 CC=mpicc
 SRC_DIR=sources
 INCLUDE=-I./headers
@@ -11,7 +11,7 @@ OPTIM=-O3
 main:
 	$(CC) $(OPTION) $(INCLUDE) ./sources/*.c -o rnnProgramm -lm $(OPTIM)
 
-allinf:
+debug:
 	$(CC) $(OPTION) $(INCLUDE) -D ALLINF ./sources/*.c -o rnnProgramm -lm $(OPTIM)
 
 clean:

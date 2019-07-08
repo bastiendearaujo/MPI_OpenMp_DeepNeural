@@ -12,8 +12,8 @@
 
 #define NUM_THREADS 2
 
+char * fileLearnKdd = "./exampleFiles/KDDTest+.txt";
 char * fileTestKdd = "./exampleFiles/KDDTest+.txt";
-char * fileLearnKdd = "./exampleFiles/KDDTrain+.txt";
 
 int layerSize[NBLAYER];
 
@@ -39,11 +39,17 @@ int nbColMatrix;
 int nbRawMatrix;
 int sizeOfTableOutput;
 
+// MPI VARIABLE
+int initialized, finalized;
+int nb_procs, rank;
+
 void preprocessing(char * nameFile){
     readFile(nameFile);
     sizeOfTableOutput = getSizeOfTableOutput();
+
     nbColMatrix = getNbColMatrix();
     nbRawMatrix = getNbRawMatrix();
+
     matrix = malloc(sizeof(double)*nbColMatrix*nbRawMatrix);
     vectorOutput = malloc(sizeof(int)*nbRawMatrix);
 
@@ -115,24 +121,16 @@ void init_layer(LAYER * layer, int raw, int currentLayer){
     }
 }
 
+// init value prev
 void rnnsetstart(LAYER * tabLayer[]){
     int i, k;
     #pragma omp for schedule(static) private(i)
     for (i = 0; i < NBLAYER; ++i){
-        if (tabLayer[i]->typeLayer == NBLAYER-1){
+        if (tabLayer[i]->typeLayer == NBLAYER-1){ // Output
             for (k = 0; k < tabLayer[i]->nbNodes; ++k){
-                // Parallelize
-                // MPI_Bcast(matrix_B, n*n, MPI_INT, 0, MPI_COMM_WORLD);
-                // MPI_Scatter(matrix_A, n*n/nb_procs, MPI_INT, piece_matrix, n*n/nb_procs, MPI_INT,0,MPI_COMM_WORLD);
-
                 tabLayer[i]->value_prev[k] = sigmoid(tabLayer[i]->value[k]);
-
-                // MPI_Barrier(MPI_COMM_WORLD);
-                // MPI_Gather( result_piece_matrix, n*n/nb_procs, MPI_INT, matrix_Result, n*n/nb_procs, MPI_INT, 0, MPI_COMM_WORLD);
-                // Block the caller until all processes in the communicator have called it
-                // MPI_Barrier(MPI_COMM_WORLD);
             }
-        }else{
+        }else{ // Not Output
             for (k = 0; k < tabLayer[i]->nbNodes; ++k){
                 tabLayer[i]->value_prev[k] = tabLayer[i]->value[k];
             }
@@ -140,7 +138,9 @@ void rnnsetstart(LAYER * tabLayer[]){
     }
 }
 
-void rnnset(LAYER * tabLayer[]){
+// init value
+void rnnset(LAYER * tabLayer[], double * out){
+    
     int i,j;
     #pragma omp for schedule(static) private(i)
     for (i = 0; i < NBLAYER; ++i){
@@ -149,55 +149,32 @@ void rnnset(LAYER * tabLayer[]){
             for (j = 0; j < tabLayer[i]->nbNodes; ++j){
                 tabLayer[i]->value[j] = tabLayer[i]->bias[j];
             }
-            // Parallelize
-            // MPI_Bcast(matrix_B, n*n, MPI_INT, 0, MPI_COMM_WORLD);
-            // MPI_Scatter(matrix_A, n*n/nb_procs, MPI_INT, piece_matrix, n*n/nb_procs, MPI_INT,0,MPI_COMM_WORLD);
-            
             matrixTimesMatrixTan(tabLayer[i-1]->value, tabLayer[i-1]->value_prev, tabLayer[i-1]->weight, tabLayer[i]->value, tabLayer[i-1]->bias, tabLayer[i-1]->nbNodes, tabLayer[i]->nbNodes);            
-
-            // MPI_Barrier(MPI_COMM_WORLD);
-            // MPI_Gather( result_piece_matrix, n*n/nb_procs, MPI_INT, matrix_Result, n*n/nb_procs, MPI_INT, 0, MPI_COMM_WORLD);
-            // Block the caller until all processes in the communicator have called it
-            // MPI_Barrier(MPI_COMM_WORLD);
+        }
+        for (j = 0; j < tabLayer[i]->nbNodes; ++j){
+            tabLayer[i]->error[j] = 0.0;
         }
     }
+
+    vectorSubstraction(tabLayer[NBLAYER-1]->value, out, tabLayer[NBLAYER-1]->error, tabLayer[NBLAYER-1]->nbNodes);
 }
 
 void rnnlearn(LAYER * tabLayer[], double * out, double learningrate){
     int i,j,k;
     int normalize = 5;
-    #pragma omp for schedule(static) private(i)
-    for(i = 0; i < NBLAYER; i++){
-        for (j = 0; j < tabLayer[i]->nbNodes; ++j){
-            tabLayer[i]->error[j] = 0.0;
-        }
+    // #pragma omp for schedule(static) private(i)
+    // for(i = 0; i < NBLAYER; i++){
+    //     for (j = 0; j < tabLayer[i]->nbNodes; ++j){
+    //         tabLayer[i]->error[j] = 0.0;
+    //     }
 
-        if (tabLayer[i]->typeLayer == NBLAYER-1){
-            // Substraction vector with OUT and final out
-            // Parallelize
-            // MPI_Bcast(matrix_B, n*n, MPI_INT, 0, MPI_COMM_WORLD);
-            // MPI_Scatter(matrix_A, n*n/nb_procs, MPI_INT, piece_matrix, n*n/nb_procs, MPI_INT,0,MPI_COMM_WORLD);
-
-            vectorSubstraction(tabLayer[i]->value, out, tabLayer[i]->error, tabLayer[i]->nbNodes);
-
-            // MPI_Barrier(MPI_COMM_WORLD);
-            // MPI_Gather( result_piece_matrix, n*n/nb_procs, MPI_INT, matrix_Result, n*n/nb_procs, MPI_INT, 0, MPI_COMM_WORLD);
-            // Block the caller until all processes in the communicator have called it
-            // MPI_Barrier(MPI_COMM_WORLD);
-        }
-    }
+    //     if (tabLayer[i]->typeLayer == NBLAYER-1){
+    //         vectorSubstraction(tabLayer[i]->value, out, tabLayer[i]->error, tabLayer[i]->nbNodes);
+    //     }
+    // }
 
     for(i = NBLAYER-2; i>= 0; i--){
-        // Parallelize
-        // MPI_Bcast(matrix_B, n*n, MPI_INT, 0, MPI_COMM_WORLD);
-        // MPI_Scatter(matrix_A, n*n/nb_procs, MPI_INT, piece_matrix, n*n/nb_procs, MPI_INT,0,MPI_COMM_WORLD);
-        
         matrixTimesMatrix(tabLayer[i+1]->error, tabLayer[i]->weight, tabLayer[i]->error, tabLayer[i+1]->nbNodes, tabLayer[i]->nbNodes);
-        
-        // MPI_Barrier(MPI_COMM_WORLD);
-        // MPI_Gather( result_piece_matrix, n*n/nb_procs, MPI_INT, matrix_Result, n*n/nb_procs, MPI_INT, 0, MPI_COMM_WORLD);
-        // Block the caller until all processes in the communicator have called it
-        // MPI_Barrier(MPI_COMM_WORLD);
     }
 
     #pragma omp for schedule(static) private(i)
@@ -223,7 +200,7 @@ void rnnlearn(LAYER * tabLayer[], double * out, double learningrate){
             }
             tabLayer[i+1]->bias[k] -= tmp;
             if(i == NBLAYER-2){
-                // Normalize weight
+                // Normalize
                 if(tabLayer[i]->bias[k]>normalize){
                     tabLayer[i]->bias[k]=normalize;
                 }
@@ -235,18 +212,18 @@ void rnnlearn(LAYER * tabLayer[], double * out, double learningrate){
     }
 }
 
-double geterror(LAYER* tabLayer){
+double geterror(LAYER* layer){
     double res =0.0;
     int i;
     #pragma omp for schedule(static) private(i)
-    for (i = 0; i < tabLayer->nbNodes; ++i){ 
-        if(tabLayer->error[i]<0){
-            res -= tabLayer->error[i];
+    for (i = 0; i < layer->nbNodes; ++i){ 
+        if(layer->error[i]<0){
+            res -= layer->error[i];
         }else{
-            res += tabLayer->error[i];
+            res += layer->error[i];
         }
     }
-    return res/(tabLayer->nbNodes);
+    return res/(layer->nbNodes);
 }
 
 void displayResult(LAYER * layer){
@@ -258,7 +235,7 @@ void displayResult(LAYER * layer){
 
 void fillOutc(double * out, int raw){
     int i; 
-    #pragma omp for schedule(static) private(i)
+    // #pragma omp for schedule(static) private(i)
     for (i = 0; i < sizeOfTableOutput; ++i){
         if (i == vectorOutput[raw]){
             out[i] = 1.0;
@@ -320,15 +297,53 @@ void ajustError(LAYER * layer){
     }
 }
 
+// Create new layer to send at each cluster
+// void splitLayer(int rank, LAYER * oldTabLayer[], LAYER * newTabLayer[]){
+
+//     /***** Split INPUT layer *****/
+//     int nbElemInput, i, j, k;
+    
+//     // Split value
+//     if (rank != 11){
+//         nbElemInput = 10;
+
+//     }else{
+//         nbElemInput = 12;
+//     } 
+//     newTabLayer[0]->nbNodes = nbElemInput;
+//     newTabLayer[0]->typeLayer = oldTabLayer[0]->typeLayer;
+//     for (i = 0; i < nbElemInput; i++){
+//         newTabLayer[0]->value[i] = oldTabLayer[0]->value[10*rank+i];
+//     }
+
+//     **** Split HD layer ****
+//     for(i = 1; i < NBLAYER-2; i++){ //Each hidden layer
+//         // Split value
+//         for (j = 0; j < 10; j++){
+//             newTabLayer[i]->value[j] = oldTabLayer[i]->value[10*rank+j];
+//         }
+
+//         // Split weight
+//         for (k = 0; k < tabLayer[k]->nbNodes; k++) {
+//             for (j = 0; j < tabLayer[i-1]->nbNodes; j++) {
+//                 newTabLayer[i]->weight[k] = oldTabLayer->weight[j*tabLayer[i]->nbNodes+k];
+//             }
+//         }
+//     }
+// }
+
 void learnKDD(){
     int i, j, sum=0;
-    double tbeg, elapsedTime;
-
+    clock_t start, end;
+    double cpu_time_used;
     nbRawMatrix = 0;
-    tbeg = MPI_Wtime();
+    printf("Begin preprocessing\n");
+    start = clock();
     preprocessing(fileLearnKdd);
-    elapsedTime = MPI_Wtime() - tbeg;
-    printf("Time to execute preprocessing : %f\n", elapsedTime);
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("Time to execute learnKDD : %f\n", cpu_time_used);
+
     nbErrorFind = malloc(sizeof(int)*sizeOfTableOutput);
     #pragma omp for schedule(static) private(i)
     for (i = 0; i < sizeOfTableOutput; ++i){
@@ -350,19 +365,18 @@ void learnKDD(){
     double * out = malloc(sizeof(double)*sizeOfTableOutput);
     double learningrate = 0.03;
 
-    for (i = 0; i < nbRawMatrix; ++i){ //nbRawMatrix
+    for (i = 1; i <= nbRawMatrix; ++i){
         error = 1.0;
         j = 0;
         init_layer(tabLayer[0], i, 0);
         fillOutc(out, i);
         while (error > 0.05 && j<1000) {
             rnnsetstart(tabLayer);
-            rnnset(tabLayer);
+            rnnset(tabLayer, out);
             rnnlearn(tabLayer,out,learningrate);
             error = geterror(tabLayer[NBLAYER-1]);
             j++;
         }
-
         ajustError(tabLayer[NBLAYER-1]);
         #ifdef ALLINF      
             printf("\nLigne : %d | trouvé en : %d iteration  | ", i+1, j);
@@ -403,23 +417,21 @@ void testKDD(){
     ((void) error);
     double * outc = malloc(sizeof(double)*sizeOfTableOutput);
     double learningrate = 0.1;
-    int i, j;
-    for (i = 0; i < nbRawMatrix; ++i){ //nbRawMatrix
+    int i;
+    for (i = 1; i <= nbRawMatrix; ++i){
         error = 1.0;
-        j = 0;
         init_layer(tabLayer[0], i, 0);
         fillOutc(outc, i);
         
         rnnsetstart(tabLayer);
-        rnnset(tabLayer);
+        rnnset(tabLayer, outc);
         rnnlearn(tabLayer,outc,learningrate);
         error = geterror(tabLayer[NBLAYER-1]);
-        j++;
-
         ajustError(tabLayer[NBLAYER-1]);
 
         #ifdef ALLINF      
-            printf("\nLigne : %d | trouvé en : %d iteration  | ", i+1, j);
+            printf("\nLigne : %d | Error : %f |", i, error);
+            displayVector(outc, sizeOfTableOutput);
         #endif
 
         wichError(tabLayer[NBLAYER-1]);
@@ -436,28 +448,26 @@ void testKDD(){
 }
 
 int main(int argc, char ** argv){
-    double tbeg, elapsedTime;
-    int nb_procs, rank;
+    // double tbeg, elapsedTime;
 
-    MPI_Init(&argc, &argv);
-    MPI_Comm_size(MPI_COMM_WORLD, &nb_procs);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    if (rank == 0){
+    // MPI_Init(&argc, &argv);
+    // MPI_Comm_size(MPI_COMM_WORLD, &nb_procs);
+    // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    printf("Begin Learn\n");
+    // tbeg = MPI_Wtime();
+    clock_t start, end;
+    double cpu_time_used;
+    start = clock();
+    learnKDD();
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    // elapsedTime = MPI_Wtime() - tbeg;
+    printf("Time to execute learnKDD : %f\n", cpu_time_used);
 
-        printf("Begin Learn\n");
-        tbeg = MPI_Wtime();
-        learnKDD();
-        elapsedTime = MPI_Wtime() - tbeg;
-        printf("Time to execute learnKDD : %f\n", elapsedTime);
-
-        printf("End Learn, begin test\n");
-        tbeg = MPI_Wtime();    
-        testKDD();
-        elapsedTime = MPI_Wtime() - tbeg;
-        printf("Time to execute testKDD : %f\n", elapsedTime);
-
-    }
-
-    MPI_Finalize();
-
+    printf("End Learn, begin test\n");
+    start = clock();
+    testKDD();
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("Time to execute testKDD : %f\n", cpu_time_used);
 }

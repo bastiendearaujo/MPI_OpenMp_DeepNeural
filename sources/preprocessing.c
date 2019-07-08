@@ -215,6 +215,7 @@ void makeMatrix(char * nameFile, double * matrix, int * vectorOutput){
             char* tmp = strdup(line);
             field = getfield(tmp, i+1);
             makeVector(i, field, matrix, vectorOutput);
+            free(tmp);
         }
         currentRaw ++; 
     }

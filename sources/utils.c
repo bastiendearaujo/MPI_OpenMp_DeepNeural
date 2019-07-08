@@ -48,6 +48,7 @@ double sigmoid(double a){
     return res;
 }
 
+// Value, Value prev, weight, value, bias , node-1, node i
 void matrixTimesMatrixTan(double * matrix_A, double * matrix_C, double * matrix_B, double * matrix_Result, double* bias, int n, int m){
     int i, j;
     for (i = 0; i < m; i++) {
