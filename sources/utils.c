@@ -49,17 +49,17 @@ double sigmoid(double a){
 }
 
 // Value, Value prev, weight, value, bias , node-1, node i
-void matrixTimesMatrixTan(double * matrix_A, double * matrix_C, double * matrix_B, double * matrix_Result, double* bias, int n, int m){
+void matrixTimesMatrixTan(double * matrix_A, double * matrix_B, double * matrix_Result, double* bias, int n, int m){
     int i, j;
     for (i = 0; i < m; i++) {
         for (j = 0; j < n; j++) {
             matrix_Result[i] += matrix_B[j*m+i] * matrix_A[j];
-            matrix_Result[i] += matrix_B[j*m+i] * matrix_C[j];
         }
         matrix_Result[i] = sigmoid(matrix_Result[i]);
     }
 }
 
+// vectorSubstraction(tabLayer[NBLAYER-1]->value, out, tabLayer[NBLAYER-1]->error, tabLayer[NBLAYER-1]->nbNodes);
 void vectorSubstraction(double * a, double * b, double * c , int size){
     for (int i = 0; i < size; ++i){
         c[i] = a[i] - b[i];
@@ -90,9 +90,9 @@ void matrixTimesMatrix(double * matrix_A, double * matrix_B, double * matrix_Res
     int i, j;
     for (i = 0; i < m; i++) {
         for (j = 0; j < n; j++) {
-            matrix_Result[i] +=  matrix_B[j*n+i]* matrix_A[j];
+            matrix_Result[i] +=  matrix_B[i*n+j]* matrix_A[j];
         }
-        matrix_Result[i] = tanh(matrix_Result[i]);
+        // matrix_Result[i] = tanh(matrix_Result[i]);
     }
 }
 

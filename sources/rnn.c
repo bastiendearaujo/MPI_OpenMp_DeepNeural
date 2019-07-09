@@ -128,7 +128,7 @@ void rnnsetstart(LAYER * tabLayer[]){
     for (i = 0; i < NBLAYER; ++i){
         if (tabLayer[i]->typeLayer == NBLAYER-1){ // Output
             for (k = 0; k < tabLayer[i]->nbNodes; ++k){
-                tabLayer[i]->value_prev[k] = sigmoid(tabLayer[i]->value[k]);
+                tabLayer[i]->value_prev[k] = tanh(tabLayer[i]->value[k]);
             }
         }else{ // Not Output
             for (k = 0; k < tabLayer[i]->nbNodes; ++k){
@@ -149,10 +149,24 @@ void rnnset(LAYER * tabLayer[], double * out){
             for (j = 0; j < tabLayer[i]->nbNodes; ++j){
                 tabLayer[i]->value[j] = tabLayer[i]->bias[j];
             }
-            matrixTimesMatrixTan(tabLayer[i-1]->value, tabLayer[i-1]->value_prev, tabLayer[i-1]->weight, tabLayer[i]->value, tabLayer[i-1]->bias, tabLayer[i-1]->nbNodes, tabLayer[i]->nbNodes);            
+            // compute the calue from the incoming synapses
+            // if it's a forward link 
+            // if (tabLayer[i-1]->typeLayer < tabLayer[i]->typeLayer){
+                // printf("FORWARD\n");
+                matrixTimesMatrixTan(tabLayer[i-1]->value, tabLayer[i-1]->weight, tabLayer[i]->value, tabLayer[i-1]->bias, tabLayer[i-1]->nbNodes, tabLayer[i]->nbNodes);
+            // }else{
+                // printf("BACKFORWARD\n");
+                // matrixTimesMatrixTan(tabLayer[i-1]->value_prev, tabLayer[i-1]->weight, tabLayer[i]->value, tabLayer[i-1]->bias, tabLayer[i-1]->nbNodes, tabLayer[i]->nbNodes);
+            // }
+        }else{
+            for (j = 0; j < tabLayer[i]->nbNodes; ++j){
+                tabLayer[i]->value[j] = 1.0*rand()/(RAND_MAX+1.0);
+            }
         }
+
         for (j = 0; j < tabLayer[i]->nbNodes; ++j){
             tabLayer[i]->error[j] = 0.0;
+            tabLayer[i]->value_prev[j] = 0.0;
         }
     }
 
@@ -173,6 +187,7 @@ void rnnlearn(LAYER * tabLayer[], double * out, double learningrate){
     //     }
     // }
 
+    // Compute error
     for(i = NBLAYER-2; i>= 0; i--){
         matrixTimesMatrix(tabLayer[i+1]->error, tabLayer[i]->weight, tabLayer[i]->error, tabLayer[i+1]->nbNodes, tabLayer[i]->nbNodes);
     }
@@ -182,13 +197,18 @@ void rnnlearn(LAYER * tabLayer[], double * out, double learningrate){
         for (k = 0; k < tabLayer[i+1]->nbNodes; ++k){
             double tmp=0.0;
             for (j = 0; j < tabLayer[i]->nbNodes; ++j){
-
-                tmp = tabLayer[i+1]->error[k] * learningrate;
-                if(i != NBLAYER-2){
-                    tmp *= 1 - (tabLayer[i+1]->value[k] * tabLayer[i+1]->value[k]);
-                }
+                // if it's a forward link 
+                // if (tabLayer[i-1]->typeLayer > tabLayer[i]->typeLayer){
+                    tmp = tabLayer[i+1]->error[k] * learningrate * tabLayer[i]->value[j];
+                // }else{
+                    // tmp = tabLayer[i+1]->error[k] * learningrate * tabLayer[i]->value_prev[j];
+                // }
+                // if(i != NBLAYER-2){
+                    // tmp *= 1 - (tabLayer[i+1]->value[k] * tabLayer[i+1]->value[k]);
+                // }
                 tabLayer[i]->weight[j*tabLayer[i+1]->nbNodes+k] -= tmp;
 
+                //if Output layer
                 if (i == NBLAYER-2){
                     // Normalize weight
                     if(tabLayer[i]->weight[j*tabLayer[i+1]->nbNodes+k]>normalize){
@@ -199,6 +219,7 @@ void rnnlearn(LAYER * tabLayer[], double * out, double learningrate){
                 }
             }
             tabLayer[i+1]->bias[k] -= tmp;
+            //if Output layer
             if(i == NBLAYER-2){
                 // Normalize
                 if(tabLayer[i]->bias[k]>normalize){
@@ -255,11 +276,11 @@ void initLayerSize(){
     layerSize[NBLAYER-1] = sizeOfTableOutput;
 }
 
-void wichError(LAYER * layer){
+void wichError(LAYER * layer, double * out){
     double max = 0.0;
     char * res;
     ((void) res);
-    int i, indiceMax =0;
+    int i, indiceMax =0, indiceOut = 0;
     #pragma omp for schedule(static) private(i)
     for (i = 0; i < layer->nbNodes; ++i){ 
         if (layer->value[i]>max){
@@ -267,9 +288,16 @@ void wichError(LAYER * layer){
             res = outTableRnn[i];
             indiceMax = i;
         }
+
+        if (out[i] == 1){
+            indiceOut = i;
+        }
     }
 
-    nbErrorFind[indiceMax]++; 
+    if (indiceOut == indiceMax){
+        nbErrorFind[indiceMax]++; 
+    }
+
     #ifdef ALLINF      
         printf("Type erreur : %s   | Sureté : %f \n", res, max);
     #endif
@@ -364,14 +392,14 @@ void learnKDD(){
     double error = 1.0;
     ((void) error);
     double * out = malloc(sizeof(double)*sizeOfTableOutput);
-    double learningrate = 0.1;
+    double learningrate = 0.0002;
 
     for (i = 0; i < nbRawMatrix; ++i){
         error = 1.0;
         j = 0;
         init_layer(tabLayer[0], i, 0);
         fillOutc(out, i);
-        while (error > 0.05 && j<1000) {
+        while (error > 0.15 && j<100) {
             rnnsetstart(tabLayer);
             rnnset(tabLayer, out);
             rnnlearn(tabLayer,out,learningrate);
@@ -383,7 +411,7 @@ void learnKDD(){
             printf("\nLigne : %d | trouvé en : %d iteration  | ", i+1, j);
         #endif
 
-        wichError(tabLayer[NBLAYER-1]);
+        wichError(tabLayer[NBLAYER-1], out);
         #ifdef ALLINF      
             displayResult(tabLayer[NBLAYER-1]);
         #endif
@@ -435,7 +463,7 @@ void testKDD(){
             displayVector(outc, sizeOfTableOutput);
         #endif
 
-        wichError(tabLayer[NBLAYER-1]);
+        wichError(tabLayer[NBLAYER-1], outc);
         #ifdef ALLINF      
             displayResult(tabLayer[NBLAYER-1]);
         #endif
