@@ -49,7 +49,7 @@ double sigmoid(double a){
 }
 
 // Value, Value prev, weight, value, bias , node-1, node i
-void matrixTimesMatrixTan(double * matrix_A, double * matrix_B, double * matrix_Result, double* bias, int n, int m){
+void matrixTimesMatrixTan(double * matrix_A, double * matrix_B, double * matrix_Result, int n, int m){
     int i, j;
     for (i = 0; i < m; i++) {
         for (j = 0; j < n; j++) {
@@ -62,7 +62,11 @@ void matrixTimesMatrixTan(double * matrix_A, double * matrix_B, double * matrix_
 // vectorSubstraction(tabLayer[NBLAYER-1]->value, out, tabLayer[NBLAYER-1]->error, tabLayer[NBLAYER-1]->nbNodes);
 void vectorSubstraction(double * a, double * b, double * c , int size){
     for (int i = 0; i < size; ++i){
-        c[i] = a[i] - b[i];
+        // if (a[i] < 0.01){
+        //     c[i] = (a[i] - b[i]);
+        // }else{
+            c[i] = (a[i] - b[i])*sigmoid(a[i])*sigmoid((1-a[i]));            
+        // }
     }
 }
 

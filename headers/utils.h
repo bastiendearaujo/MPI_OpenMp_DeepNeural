@@ -6,7 +6,7 @@ int isPresentTab(char **, int, char *);
 void displayMatrix(double*, int, int);
 void displayVector(double *, int);
 double sigmoid(double a);
-void matrixTimesMatrixTan(double *, double *, double *, double*, int, int);
+void matrixTimesMatrixTan(double *, double *, double *, int, int);
 void vectorSubstraction(double *, double *, double *, int);
 void vectorTimesDouble(double *, double *, double, int, int);
 void matrixScalaire(double *, double *, int, int);

@@ -1,7 +1,7 @@
 
 #define NBCOL 41
 #define NBLAYER 5
-#define NBHD 120
+#define NBHD 210
 
 void displayErrorFind(int * nbErrorFind);
 char* getfield(char*, int);
