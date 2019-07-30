@@ -41,7 +41,7 @@ int sizeOfTableOutput;
 
 // MPI VARIABLE
 int initialized, finalized;
-int nb_procs, rank;
+int nbProcs, rank;
 
 void preprocessing(char * nameFile, int isTest){
     readFile(nameFile);
@@ -67,15 +67,19 @@ void init_layer(LAYER * layer, int raw, int currentLayer){
         layer->nbNodes = nbColMatrix;
         // Init vector input layer
         layer->value = malloc(sizeof(double)*nbColMatrix);
-        #pragma omp for schedule(static) private(i)
-        for (i=0; i<nbColMatrix; i++) {
-            layer->value[i] = matrix[nbColMatrix*raw+i];
+        if (rank == 0){
+            #pragma omp for schedule(static) private(i)
+            for (i=0; i<nbColMatrix; i++) {
+                layer->value[i] = matrix[nbColMatrix*raw+i];
+            }
         }
         // Init weight 
         layer->weight = malloc(sizeof(double)*nbColMatrix*layerSize[currentLayer+1]);
-        #pragma omp for schedule(static) private(i)
-        for (i = 0; i < nbColMatrix*layerSize[currentLayer+1]; ++i){
-            layer->weight[i] = 1.0 * (double)rand() / RAND_MAX - 1.0/2;
+        if (rank == 0){
+            #pragma omp for schedule(static) private(i)
+            for (i = 0; i < nbColMatrix*layerSize[currentLayer+1]; ++i){
+                layer->weight[i] = 1.0 * (double)rand() / RAND_MAX - 1.0/2;
+            }
         }
     }else if (currentLayer == NBLAYER-1){ // Init Output Layer
         layer->nbNodes = layerSize[currentLayer];
@@ -90,35 +94,27 @@ void init_layer(LAYER * layer, int raw, int currentLayer){
 
         layer->weight = malloc(sizeof(double) * layerSize[currentLayer+1] * layerSize[currentLayer]);
         
-
-        #pragma omp for schedule(static) private(i)
-        for (i = 0; i < layerSize[currentLayer+1]*layerSize[currentLayer]; ++i){
-            layer->weight[i] = 1.0 * (double)rand() / RAND_MAX - 1.0/2;
+        if(rank == 0){
+            #pragma omp for schedule(static) private(i)
+            for (i = 0; i < layerSize[currentLayer+1]*layerSize[currentLayer]; ++i){
+                layer->weight[i] = 1.0 * (double)rand() / RAND_MAX - 1.0/2;
+            }
         }
     }
 
     layer->bias = malloc(sizeof(double)*layerSize[currentLayer]);
-    #pragma omp for schedule(static) private(i)
-    for (i = 0; i < layerSize[currentLayer]; ++i){
-        layer->bias[i] = 1.0 * (double)rand() / RAND_MAX - 1.0/2;
-    }
-
     layer->value_prev = malloc(sizeof(double)*layerSize[currentLayer]);
-    #pragma omp for schedule(static) private(i)
-    for (i=0; i<layerSize[currentLayer]; i++) {
-        layer->value_prev[i] = 0.0;
-    }
-
     layer->error = malloc(sizeof(double)*layerSize[currentLayer]);
-    #pragma omp for schedule(static) private(i)
-    for (i=0; i<layerSize[currentLayer]; i++) {
-        layer->error[i] = 0.0;
-    }
-
     layer->error_prev = malloc(sizeof(double)*layerSize[currentLayer]);
-    #pragma omp for schedule(static) private(i)
-    for (i=0; i<layerSize[currentLayer]; i++) {
-        layer->error_prev[i] = 0.0;
+    
+    if (rank == 0){
+        #pragma omp for schedule(static) private(i)
+        for (i = 0; i < layerSize[currentLayer]; ++i){
+            layer->bias[i] = 1.0 * (double)rand() / RAND_MAX - 1.0/2;
+            layer->value_prev[i] = 0.0;
+            layer->error[i] = 0.0;
+            layer->error_prev[i] = 0.0;
+        }
     }
 }
 
@@ -174,7 +170,7 @@ void rnnlearn(LAYER * tabLayer[], double * out, double learningrate){
     int i,j,k;
     double normalize = 5.0;
     double * deltaWeight;
-    double tmp;
+    // double tmp;
 
     for(i = NBLAYER-2; i>= 0; i--){
         if (i == NBLAYER-2){
@@ -287,6 +283,7 @@ void wichError(LAYER * layer, double * out){
     #endif
 }
 
+// Unused function
 void freeLayer(LAYER * layer){
     free(layer->value);
     free(layer->weight);
@@ -416,24 +413,474 @@ void learnKDD(){
     displayErrorFind(nbErrorFind);
 }
 
-void testKDD(){
-    nbRawMatrix = 0;
-    preprocessing(fileTestKdd, 1);
+// void sendTabLayer(int sizeOfTableOutput){
 
-    nbErrorFind = malloc(sizeof(int)*sizeOfTableOutput);
-    for (int i = 0; i < sizeOfTableOutput; ++i){
-        nbErrorFind[i] = 0;
+//     // typedef struct layer LAYER;
+//     // struct layer {
+//     //   int typeLayer;
+//     //   int nbNodes;
+//     //   double* bias;
+//     //   double* value;
+//     //   // double* value_prev;
+//     //   double* error;
+//     //   // double* error_prev;
+//     //   double* weight;
+//     // };
+
+//     int i;
+//     MPI_Datatype structureLayerMPI;
+//     int structlen = 6;
+//     // int blocklengths[structlen]; 
+//     MPI_Datatype types[structlen];
+//     MPI_Aint displacements[structlen];
+
+//     for(i = 0; i < NBLAYER; i++){
+//         // where are the components relative to the structure
+//         int layerSizeI = layerSize[i];
+//         int layerSizeII = layerSize[i+1]*layerSize[i];
+//         int blockcounts[6] = {1,1,layerSizeI,layerSizeI,layerSizeI,layerSizeII};
+//         MPI_Address(&tabLayer[i]->typeLayer, &displacements[0]);
+//         MPI_Address(&tabLayer[i]->nbNodes, &displacements[1]);
+//         MPI_Address(&tabLayer[i]->bias, &displacements[2]);
+//         MPI_Address(&tabLayer[i]->value, &displacements[3]);
+//         MPI_Address(&tabLayer[i]->error, &displacements[4]);
+//         MPI_Address(&tabLayer[i]->weight, &displacements[5]);
+
+//         // blocklengths[0] = 1; 
+//         types[0] = MPI_INT;
+//         // displacements[0] = (size_t)&(tabLayer[i]->typeLayer) - (size_t)&tabLayer[i];
+
+//         // blocklengths[1] = 1; 
+//         types[1] = MPI_INT;
+//         // displacements[1] = (size_t)&(tabLayer[i]->nbNodes) - (size_t)&tabLayer[i];
+    
+//         // blocklengths[2] = layerSize[i]; 
+//         types[2] = MPI_DOUBLE;
+//         // displacements[2] = (size_t)&(tabLayer[i]->bias[0]) - (size_t)&tabLayer[i];
+
+//         // blocklengths[3] = layerSize[i]; 
+//         types[3] = MPI_DOUBLE;
+//         // displacements[3] = (size_t)&(tabLayer[i]->value[0]) - (size_t)&tabLayer[i];
+
+//         // blocklengths[4] = layerSize[i]; 
+//         // types[4] = MPI_DOUBLE;
+//         // displacements[4] = (size_t)&(tabLayer[i]->value_prev[0]) - (size_t)&tabLayer[i];
+
+//         // blocklengths[4] = layerSize[i]; 
+//         types[4] = MPI_DOUBLE;
+//         // displacements[4] = (size_t)&(tabLayer[i]->error[0]) - (size_t)&tabLayer[i];
+
+//         // blocklengths[6] = layerSize[i]; 
+//         // types[6] = MPI_DOUBLE;
+//         // displacements[6] = (size_t)&(tabLayer[i]->error_prev[0]) - (size_t)&tabLayer[i];
+
+//         // blocklengths[5] = layerSize[i+1]*layerSize[i];
+//         types[5] = MPI_DOUBLE;
+//         // displacements[5] = (size_t)&(tabLayer[i]->weight[0]) - (size_t)&tabLayer[i];
+        
+//         for (i = 5; i >= 0; i--)
+//             displacements[i] -= displacements[0];
+
+//         printf("One layer ready to create struct\n");
+//         MPI_Type_struct(6, blockcounts, displacements, types, &structureLayerMPI);
+//         // MPI_Type_create_struct(structlen,blocklengths,displacements,types,&structureLayerMPI);
+//         printf("struct created\n");
+//         MPI_Type_commit(&structureLayerMPI);
+//         printf("commited rank = %d \n", rank);
+
+//         // MPI_Aint typesize;
+//         // MPI_Type_extent(structureLayerMPI,&typesize);
+//         // printf("extented\n");
+        
+//         // if (rank == 0) {
+//         //     // MPI_Bcast(tabLayer, NBLAYER, MPI_INT, 0, MPI_COMM_WORLD);
+//         //     MPI_Send(&tabLayer[i],1,structureLayerMPI,1,0,MPI_COMM_WORLD);
+//         // }else{
+//         //     MPI_Recv(&tabLayer[i],1,structureLayerMPI,0,0,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+//         // }
+
+//         MPI_Bcast(&tabLayer[i], 1, structureLayerMPI, 0, MPI_COMM_WORLD);
+//         printf("Send !\n");
+//         MPI_Type_free(&structureLayerMPI);
+//     }
+// }
+
+// void sendTabLayer2(int sizeOfTableOutput){
+//     int i;
+//     for(i = 1; i < NBLAYER; i++){
+//         int layerSizeI = layerSize[i];
+//         int layerSizeII = layerSize[i+1]*layerSize[i];
+//         MPI_Bcast(&tabLayer[i]->typeLayer, 1, MPI_INT, 0, MPI_COMM_WORLD);
+//         MPI_Bcast(&tabLayer[i]->nbNodes, 1, MPI_INT, 0, MPI_COMM_WORLD);
+//         MPI_Bcast(&tabLayer[i]->bias, layerSizeI, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+//         MPI_Bcast(&tabLayer[i]->value, layerSizeI, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+//         MPI_Bcast(&tabLayer[i]->error, layerSizeI, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+//         MPI_Bcast(&tabLayer[i]->weight, layerSizeII, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+//         // if(rank == 0){
+//             // send
+//             // MPI_Send(&tabLayer[i]->value,1,structureLayerMPI,1,0,MPI_COMM_WORLD);
+//         // }else{
+//             // receive
+//         // }
+//     }
+// }
+
+// struct.c
+// struct object {
+//     char c;
+//     double x[2];
+//     int i;
+// };
+// MPI_Datatype newstructuretype;
+// int structlen = 3;
+// int blocklengths[structlen]; MPI_Datatype types[structlen];
+// MPI_Aint displacements[structlen];
+// // where are the components relative to the structure?
+// blocklengths[0] = 1; types[0] = MPI_CHAR;
+// displacements[0] = (size_t)&(myobject.c) - (size_t)&myobject;
+// blocklengths[1] = 2; types[1] = MPI_DOUBLE;
+// displacements[1] = (size_t)&(myobject.x[0]) - (size_t)&myobject;
+// blocklengths[2] = 1; types[2] = MPI_INT;
+// displacements[2] = (size_t)&(myobject.i) - (size_t)&myobject;
+// MPI_Type_create_struct(structlen,blocklengths,displacements,types,&newstructuretype);
+// MPI_Type_commit(&newstructuretype);
+// {
+// MPI_Aint typesize;
+// MPI_Type_extent(newstructuretype,&typesize);
+// if (procno==0) printf("Type extent: ");
+// }
+// if (procno==sender) {
+// MPI_Send(&myobject,1,newstructuretype,the_other,0,comm);
+// } else if (procno==receiver) {
+// MPI_Recv(&myobject,1,newstructuretype,the_other,0,comm,MPI_STATUS_IGNORE);
+// }
+// MPI_Type_free(&newstructuretype);
+
+
+void sendTabLayer(){
+
+    // MPI_Barrier(MPI_COMM_WORLD);
+
+    // Strategy with broadcast
+    // for(i = 0; i < NBLAYER; i++){
+    //     printf("Layer size : rank %d = %d\n",rank,layerSize[0] );
+    //     MPI_Bcast(tabLayer[i]->value, layerSize[i], MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    //     if (rank != 0){
+    //         printf("RANK 2\n");
+    //     }
+    //     printf("value : %f rank : %d\n", tabLayer[i]->value[0], rank);
+    // }
+
+    // Strategy with send and receive
+    // for(i = 0; i < 1; i++){
+    //     printf("Layer size : rank %d = %d\n",rank,layerSize[0] );
+    //     if (rank == 0) {
+    //         int j;
+    //         for (j = 0; j < nbProcs; j++) {
+    //             if (j != rank) {
+    //                 MPI_Send(tabLayer[i]->value, layerSize[i], MPI_DOUBLE, j, 0, MPI_COMM_WORLD);
+    //             }
+    //         }
+    //     } else {
+    //         MPI_Recv(tabLayer[i]->value, layerSize[i], MPI_DOUBLE, 0, 0, MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+    //         printf("Receive layer : %d\n", i);
+    //     }
+    //     MPI_Barrier(MPI_COMM_WORLD);
+    //     if (rank != 0){
+    //         // tabLayer[i]->value[layerSize[i]] = 120.0;
+    //         printf("RANK 2\n");
+    //     }
+    //     printf("value : %f rank : %d\n", tabLayer[i]->value[layerSize[i]], rank);
+    // }
+
+    // printf("Begin send tablayer : rank = %d \n", rank);
+    // sendTabLayer(sizeOfTableOutput);
+    // sendTabLayer2(sizeOfTableOutput);
+    // printf("NBLAYER = %d  : rank = %d \n",NBLAYER, rank);
+    // double* tabTmp;
+    // for(i = 0; i < NBLAYER; i++){
+    //     printf("Layer : %d\n", i);
+    //     int layerSizeI = layerSize[i];
+
+        // if (i != NBLAYER-1){
+        //     printf("Hidden Layer\n");
+        //     int layerSizeII = layerSize[i+1]*layerSize[i];
+        //     printf("layerSizeII : %d rank : %d\n", layerSizeII, rank);
+        //     // MPI_Barrier(MPI_COMM_WORLD);
+
+        //     // Strategy with broadcast routine
+        //     // if (rank != 0){
+        //         // free(tabLayer[i]->weight);
+        //         // tabLayer[i]->weight = malloc(sizeof(double)*layerSizeII);
+        //     // }
+
+        //     // MPI_Barrier(MPI_COMM_WORLD);
+            // MPI_Bcast(&tabLayer[i]->weight, layerSizeII, MPI_DOUBLE, 0, MPI_COMM_WORLD);            
+           
+        //     // Strategy with Send/Receive routines
+        //     // if (rank == 0) {
+        //     //     int j;
+        //     //     for (j = 0; j < nbProcs; j++) {
+        //     //         if (j != rank) {
+        //     //             MPI_Send(&tabLayer[i]->weight, layerSize[i+1]*layerSize[i], MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+        //     //             printf("weight : %f rank : %d\n", tabLayer[i]->weight[0], rank);
+        //     //         }
+        //     //     }
+        //     // }else{
+        //     //     // free(tabLayer[i]->weight);
+        //     //     tabLayer[i]->weight = malloc(sizeof(double)*layerSize[i+1]*layerSize[i]);
+        //     //     MPI_Recv(&tabLayer[i]->weight, layerSize[i+1]*layerSize[i], MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        //     //     printf("weight : %f rank : %d\n", tabLayer[i]->weight[0], rank);
+        //     // }
+        // }       
+
+        // printf("!!!!! RANK %d !!!!! bias : %f\n", rank, tmp);
+        // MPI_Bcast(tabLayer[i]->bias, layerSizeI, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+        // SEND RECEIVE STRATEGY BIAS
+        // if (rank == 0) {
+        //     int j;
+        //     for (j = 1; j < nbProcs; j++) {
+        //         printf("layer size : %d\n", layerSize[i]);
+        //         int ierr = MPI_Send(tabLayer[i]->bias, layerSize[i], MPI_DOUBLE, j, 0, MPI_COMM_WORLD);
+        //         printf("ierr : %d \n", ierr);
+        //         if (ierr != MPI_SUCCESS) {
+        //            printf("MERDE\n");
+        //        }
+        //         printf("bias : %f rank : %d\n", tabLayer[i]->bias[0], rank);
+        //     }
+        // }else{
+        //     // free(tabLayer[i]->weight);
+        //     // tabLayer[i]->weight = malloc(sizeof(double)*layerSize[i]);
+        //     printf("Receive\n");
+        //     int c = MPI_Recv(tabLayer[i]->bias, layerSize[i], MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        //     printf("c : %d \n", c);
+        //     printf("bias : %f rank : %d\n", tabLayer[i]->bias[0], rank);
+        // }
+
+        // printf("bias : %f rank : %d\n", tabLayer[i]->bias[0], rank);
+        
+        // MPI_Bcast(&tabLayer[i]->typeLayer, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        // printf("typeLayer : %d rank : %d\n", tabLayer[i]->typeLayer, rank);
+
+        // MPI_Bcast(&tabLayer[i]->nbNodes, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        // printf("nbNodes : %d rank : %d\n", tabLayer[i]->nbNodes, rank);
+
+        // MPI_Bcast(&tabLayer[i]->value, layerSizeI, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        // printf("value : %f rank : %d\n", tabLayer[i]->value[0], rank);
+
+        // MPI_Bcast(&tabLayer[i]->error, layerSizeI, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        // printf("error : %f rank : %d\n", tabLayer[i]->error[0], rank);
+
+        // tabTmp = malloc(sizeof(double)*layerSize[i]);
+        // if (rank == 0) {
+        //     for(int j = 0; j < layerSize[i]; j++){
+        //         tabTmp[j] = tabLayer[i]->bias[j];
+        //     }
+        // }
+
+        // MPI_Bcast(&tabTmp, layerSize[i], MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        // if (rank != 0){
+        //     printf("FIll Tab : %d \n",layerSize[i]);
+        //     for(int j = 0; j < layerSize[i]; j++){
+        //         tabLayer[i]->bias[j] = tabTmp[j];
+        //     }
+        //     printf("END FILL TAB!!!!!!!!!!!\n");
+        // }
+
+        // MPI_Bcast(layerSize, NBLAYER, MPI_INT, 0, MPI_COMM_WORLD);
+        // MPI_Bcast(tabLayer[i]->bias, layerSize[i], MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+        // if (rank != 0){
+        //     printf("RANK 2\n");
+        // }
+        // printf("last bias : %f | rank : %d\n", tabLayer[i]->bias[layerSize[i]], rank);
+        // double tmp;
+        // for(int j = 0; j < layerSize[i]; j++){
+        //     if (rank == 0){
+        //         tmp = tabLayer[i]->bias[j];
+        //     }
+        //     MPI_Bcast(&tmp, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        //     printf("Bias send : bias[j] = %f | rank = %d\n", tabLayer[i]->bias[j], rank);
+        //     tabLayer[i]->bias[j] = tmp;
+        // }
+        // printf("Bias send : bias[1] = %f | rank = %d\n", tabLayer[i]->bias[0], rank);
+
+        // printf("end Layer : %d\n", i);
+
+        // if(rank == 0){
+            // send
+            // MPI_Send(&tabLayer[i]->value,1,structureLayerMPI,1,0,MPI_COMM_WORLD);
+        // }else{
+            // receive
+        // }
+    // }
+    
+    // free(tabTmp);
+
+    // if (rank == 1){
+    //     printf("bias : %f rank : %d\n", tabLayer[i]->bias[0], rank);
+    // }
+
+    // printf("End of send everything : rank = %d \n", rank);
+
+    double * tmp;
+    int j,i;
+    for(j = 0; j < NBLAYER-1; j++){
+        // outTable
+        // nbErrorFind
+        // nbOutTable
+        // nbErrorFind
+        // nbOutTable
+
+        // Send Matrix
+        if (rank != 0){
+            matrix = malloc(sizeof(double)*nbColMatrix*nbRawMatrix);
+            vectorOutput = malloc(sizeof(int)*nbRawMatrix);
+        }
+        MPI_Bcast(matrix, nbColMatrix*nbRawMatrix, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        MPI_Bcast(vectorOutput, nbRawMatrix, MPI_INT, 0, MPI_COMM_WORLD);
+
+        // Send typeLayer
+        MPI_Bcast(&tabLayer[j]->typeLayer, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        // printf("typeLayer : %d rank : %d\n", tabLayer[j]->typeLayer, rank);
+        
+        // Send nbNodes        
+        MPI_Bcast(&tabLayer[j]->nbNodes, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        // printf("nbNodes : %d rank : %d\n", tabLayer[j]->nbNodes, rank);
+
+        // Send value
+        tmp = malloc(sizeof(double)* layerSize[j]);
+        if (rank == 0){
+            for(i = 0; i < layerSize[j]; i++){
+                tmp[i] = tabLayer[j]->value[i];
+            }
+        }
+        MPI_Bcast(tmp, layerSize[j], MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        if (rank != 0){
+            for(i = 0; i < layerSize[j]; i++){
+                tabLayer[j]->value[i] = tmp[i];
+            }
+        }
+        // printf("value[0] : %f rank : %d\n", tabLayer[j]->value[0], rank);
+        
+        // Send error
+        if (rank == 0){
+            for(i = 0; i < layerSize[j]; i++){
+                tmp[i] = tabLayer[j]->error[i];
+            }
+        }
+        MPI_Bcast(tmp, layerSize[j], MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        if (rank != 0){
+            for(i = 0; i < layerSize[j]; i++){
+                tabLayer[j]->error[i] = tmp[i];
+            }
+        }
+        // printf("layer : %d error[0] : %f rank : %d\n",j, tabLayer[j]->error[0], rank);
+
+        // Send bias
+        if (rank == 0){
+            for(i = 0; i < layerSize[j]; i++){
+                tmp[i] = tabLayer[j]->bias[i];
+            }
+        }
+        MPI_Bcast(tmp, layerSize[j], MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        if (rank != 0){
+            for(i = 0; i < layerSize[j]; i++){
+                tabLayer[j]->bias[i] = tmp[i];
+            }
+        }
+        // printf("layer : %d bias[0] : %f rank : %d\n",j, tabLayer[j]->bias[0], rank);
+
+        // Send weight
+        tmp = malloc(sizeof(double)* layerSize[j]*layerSize[j+1]);
+        if (rank == 0){
+            for(i = 0; i < layerSize[j]*layerSize[j+1]; i++){
+                tmp[i] = tabLayer[j]->weight[i];
+            }
+        }
+        MPI_Bcast(tmp, layerSize[j]*layerSize[j+1], MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        if (rank != 0){
+            for(i = 0; i < layerSize[j]*layerSize[j+1]; i++){
+                tabLayer[j]->weight[i] = tmp[i];
+            }
+        }
+        // printf("layer : %d bias[0] : %f rank : %d\n",j, tabLayer[j]->weight[0], rank);
+    }
+}
+
+void shareErrorFind(int * nbErrorFind){
+    if (nbProcs >1){
+        if (rank != 0) {
+            MPI_Send(nbErrorFind, sizeOfTableOutput, MPI_INT, 0, 123, MPI_COMM_WORLD);
+        } else {
+            int i;
+            int * tmp = malloc(sizeof(int)*sizeOfTableOutput);
+            MPI_Recv(tmp, sizeOfTableOutput, MPI_INT, MPI_ANY_SOURCE, 123, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            for(i = 0; i < sizeOfTableOutput; i++){
+                nbErrorFind[i] += tmp[i];
+            }
+        }
+    }
+}
+
+void testKDD(){
+    // Block the caller until all processes in the communicator have called it
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    int i;
+    if (rank == 0){
+        printf("Init Test\n");
+        nbRawMatrix = 0;
+        preprocessing(fileTestKdd, 1);
+        initLayerSize();
     }
 
-    initLayerSize();
+    MPI_Bcast(&nbColMatrix, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(layerSize, NBLAYER, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&sizeOfTableOutput, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&nbRawMatrix, 1, MPI_INT, 0, MPI_COMM_WORLD);
+   
+    if (rank != 0){
+        for (i = 0; i < NBLAYER; ++i){
+            tabLayer[i] = (LAYER*)malloc(sizeof(LAYER));
+        }
+        for (i = 0; i < NBLAYER; ++i){
+            init_layer(tabLayer[i], 0, i);
+        }
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    sendTabLayer();
+
+    if(rank == 0){
+        printf("! Structure Sent Successfully !\n");
+        printf("Begin test\n");
+    }
+
+    nbErrorFind = malloc(sizeof(int)*sizeOfTableOutput);
+    for (i = 0; i < sizeOfTableOutput; ++i){
+        nbErrorFind[i] = 0;
+    }    
+    
+    // Method to split loop
+
+    // 1 :
+    // NLocal = N/nbProcs
+    // for(i=rank*NLocal;i<(rank+1)*NLocal;i++)
+    
+    // 2 :
+    // if (i%nbProcs != rank) continue;
+
     // RUN
     double error = 1.0;
     ((void) error);
     double * outc = malloc(sizeof(double)*sizeOfTableOutput);
-    int i;
     for (i = 0; i < nbRawMatrix; ++i){
+        if (i%nbProcs != rank) continue;
         error = 1.0;
-        // init_layer(tabLayer[0], i, 0);
         intiValueLayer(tabLayer[0], i);
         fillOutc(outc, i);
         
@@ -457,31 +904,60 @@ void testKDD(){
     }
 
     free(outc);
-    printf("\nError Find in TestKDD : \n");
-    displayErrorFind(nbErrorFind);
+    MPI_Barrier(MPI_COMM_WORLD);
+    // Send nbErrorFind, add every error to display Error Find
+    // printf("Error find by rank : %d \n", rank);
+    // displayErrorFindRank(nbErrorFind, rank);
+    
+    if(rank == 0){
+        int i;
+        for(i = 0; i < nbProcs-1; i++){
+            shareErrorFind(nbErrorFind);    
+        }
+    }else{
+        shareErrorFind(nbErrorFind);    
+    }
+
+    if(rank == 0){
+        printf("\nError Find in TestKDD\n");
+        displayErrorFind(nbErrorFind);
+    }
 }
 
 int main(int argc, char ** argv){
-    // double tbeg, elapsedTime;
+    // clock_t start, end;
+    double tbeg=0, cpu_time_used=0;
 
-    // MPI_Init(&argc, &argv);
-    // MPI_Comm_size(MPI_COMM_WORLD, &nb_procs);
-    // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    printf("Begin Learn\n");
-    // tbeg = MPI_Wtime();
-    clock_t start, end;
-    double cpu_time_used;
-    start = clock();
-    learnKDD();
-    end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    // elapsedTime = MPI_Wtime() - tbeg;
-    printf("Time to execute learnKDD : %f\n", cpu_time_used);
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &nbProcs);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    printf("End Learn, begin test\n");
-    start = clock();
+    if (rank == 0){
+        printf("Begin Learn\n");
+        tbeg = MPI_Wtime();
+        // start = clock();
+        learnKDD();
+        // end = clock();
+        // cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+        cpu_time_used = MPI_Wtime() - tbeg;
+        printf("Time to execute learnKDD : %f\n", cpu_time_used);
+
+        printf("End Learn, begin test\n");
+        // start = clock();
+    }
+    
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (rank == 0)
+        tbeg = MPI_Wtime();
+        
+
     testKDD();
-    end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("Time to execute testKDD : %f\n", cpu_time_used);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    if(rank == 0){
+        cpu_time_used = MPI_Wtime() - tbeg;
+        printf("Time to execute testKDD : %f | rank : %d\n", cpu_time_used, rank);
+    }
+    MPI_Finalize();
+    return 1;
 }

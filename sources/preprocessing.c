@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <mpi.h>
 #include <string.h>
 
 #include "preprocessing.h"
@@ -41,8 +42,26 @@ char * flagTable [11] = {"SF","S0","REJ","RSTR","SH","RSTO","S1","RSTOS0","S3","
 void displayErrorFind(int * nbErrorFind){
     int sumFind = 0;
     int sumReal = 0;
+    int i;
 
-    for (int i = 0; i < sizeOfTableOutput; ++i){
+    for (i = 0; i < sizeOfTableOutput; ++i){
+        printf("%s : %d / %d | difference : %d \n", outTable[i] ,nbErrorFind[i], nbOutTable[i], nbErrorFind[i]-nbOutTable[i]);
+        sumFind += nbErrorFind[i];
+        sumReal += nbOutTable[i];
+    }
+
+    printf("total find : %d / %d  |  %d percent \n", sumFind, sumReal, ((100*sumFind)/sumReal));
+}
+
+void displayErrorFindRank(int * nbErrorFind, int rank){
+    int sumFind = 0;
+    int sumReal = 0;
+    int i;
+    if (rank != 0)
+        nbOutTable = malloc(sizeof(int)*sizeOfTableOutput);
+    MPI_Bcast(nbOutTable, sizeOfTableOutput, MPI_INT, 0, MPI_COMM_WORLD);
+
+    for (i = 0; i < sizeOfTableOutput; ++i){
         printf("%s : %d / %d | difference : %d \n", outTable[i] ,nbErrorFind[i], nbOutTable[i], nbErrorFind[i]-nbOutTable[i]);
         sumFind += nbErrorFind[i];
         sumReal += nbOutTable[i];
@@ -64,6 +83,7 @@ char* getfield(char* line, int num){
 }
 
 void readFile(char * nameFile){
+    int i;
     nbRawMatrix = 0;
     FILE* stream = fopen(nameFile, "r");
 
@@ -91,7 +111,7 @@ void readFile(char * nameFile){
     #endif
 
     nbOutTable = malloc(sizeof(int)*sizeOfTableOutput);
-    for (int i = 0; i < sizeOfTableOutput; ++i){
+    for (i = 0; i < sizeOfTableOutput; ++i){
         nbOutTable[i] = 0;
     }
 

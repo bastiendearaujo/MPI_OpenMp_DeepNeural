@@ -3,7 +3,8 @@
 #define NBLAYER 5
 #define NBHD 210
 
-void displayErrorFind(int * nbErrorFind);
+void displayErrorFind(int *);
+void displayErrorFindRank(int * , int);
 char* getfield(char*, int);
 void readFile(char *);
 void makeVector(int, char *, double*, int*);

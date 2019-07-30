@@ -5,8 +5,9 @@
 // UTILS TABLE
 
 void printTab(char** tab, int size){
+    int i;
     printf("\n[");
-    for (int i = 0; i < size; ++i){
+    for (i = 0; i < size; ++i){
         printf("%s ;", tab[i]);
     }
     printf("]\n");
@@ -36,8 +37,9 @@ void displayMatrix(double* matrix, int nbRaw, int nbCol){
 }
 
 void displayVector(double * vector, int nbRaw){
+    int i;
     printf("[");
-    for (int i = 0; i < nbRaw; ++i){
+    for (i = 0; i < nbRaw; ++i){
         printf("%f ; ",vector[i]);
     }
     printf("]\n");
@@ -59,9 +61,9 @@ void matrixTimesMatrixTan(double * matrix_A, double * matrix_B, double * matrix_
     }
 }
 
-// vectorSubstraction(tabLayer[NBLAYER-1]->value, out, tabLayer[NBLAYER-1]->error, tabLayer[NBLAYER-1]->nbNodes);
 void vectorSubstraction(double * a, double * b, double * c , int size){
-    for (int i = 0; i < size; ++i){
+    int i;
+    for (i = 0; i < size; ++i){
         // if (a[i] < 0.01){
         //     c[i] = (a[i] - b[i]);
         // }else{
@@ -71,7 +73,8 @@ void vectorSubstraction(double * a, double * b, double * c , int size){
 }
 
 void vectorTimesDouble(double * vector, double * resultat, double x, int size, int compute){
-    for (int i = 0; i < size; ++i){
+    int i;
+    for (i = 0; i < size; ++i){
         if(compute){
             resultat[i] *= vector[i] * x;
         }else{
